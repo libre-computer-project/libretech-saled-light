@@ -1,0 +1,34 @@
+#!/bin/php
+<?php
+
+if ($argc < 2 || $argc > 2){
+	echo "${argv[0]} config\n";
+	exit(1);
+}
+
+if (!is_file($argv[1])){
+	echo "${argv[1]} config file is not found.\n";
+	exit(1);
+}
+
+$config = parse_ini_file($argv[1]);
+
+fwrite(STDERR,print_r($config,true));
+
+$frame_width = intval($config["SALED_PANEL_WIDTH"]);
+$frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_pixel_count = $frame_width * $frame_height;
+
+$frame_output_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
+$frame_output_size = $frame_pixel_count * $frame_output_pixel_size;
+
+$RGB_SEQ=array(str_repeat(chr(0xff),3),chr(0xff)."\0\0","\0".chr(0xff)."\0","\0\0".chr(0xff));
+
+$frame = 0;
+do {
+	echo str_repeat("\0\0\0",($frame % $frame_pixel_count));
+	echo $RGB_SEQ[($frame / $frame_pixel_count) % 4];
+	echo str_repeat("\0\0\0",$frame_pixel_count - ($frame % $frame_pixel_count) - 1);
+} while (++$frame);
+
+?>

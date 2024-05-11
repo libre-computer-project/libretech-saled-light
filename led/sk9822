@@ -1,0 +1,65 @@
+#!/bin/php
+<?php
+
+$SK9822_FRAME_INIT=str_repeat(chr(0x00),4);
+#$SK9822_FRAME_TERM = str_repeat(chr(0xff),4);
+$SK9822_PIXEL_INIT=0b11100000;
+#$SK9822_PIXEL_COLORS=3;
+#$SK9822_PIXEL_COLOR_BITS=8;
+
+if ($argc < 2 || $argc > 2){
+	echo "${argv[0]} config\n";
+	exit(1);
+}
+
+if (!is_file($argv[1])){
+	echo "${argv[1]} config file is not found.\n";
+	exit(1);
+}
+
+$config = parse_ini_file($argv[1]);
+$config += parse_ini_file("led/".$config["SALED_PANEL_LED"].".ini");
+
+fwrite(STDERR,print_r($config,true));
+
+$frame_width = intval($config["SALED_PANEL_WIDTH"]);
+$frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_pixels = $frame_width * $frame_height;
+
+$frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
+$frame_input_size = $frame_pixels * $frame_input_pixel_size;
+
+$frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
+$frame_led_brightness = intval($config["SALED_LED_BRIGHTNESS_DEFAULT"]);
+
+if ($frame_pixel_brightness < 1 || $frame_pixel_brightness > 15){
+	echo "Frame Pixel Brightness Exceeds Bounds\n";
+	exit(1);
+}
+
+#TODO: SALED_PANEL_HDR BRIGHTNESS CONTROL
+$frame_pixel_init = chr($SK9822_PIXEL_INIT | $frame_led_brightness);
+$frame_pixel_swap = $config["SALED_PANEL_PIXEL_LAYOUT"] === "rgb"; #assumes LSB so RGB needs swap
+
+if ($frame_pixel_swap){
+       	if ($frame_input_pixel_size !== 3){
+		echo "BGR Panel for HDR input is not implemented.";
+		exit(1);
+	}
+}
+
+#TODO: make use of stream API
+#TODO: handle snake addressing
+#TODO: 10+ bpp input processing
+$frame = 0;
+while ($frame_input_data = fread(STDIN, $frame_input_size)){
+	if ($frame_pixel_swap)
+		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
+	
+	$frame_output_data = implode(array_map(function($pixel) use ($frame_pixel_init) {
+			return $frame_pixel_init.$pixel;
+		}, str_split($frame_input_data, $frame_input_pixel_size)));
+	fwrite(STDOUT, $SK9822_FRAME_INIT.$frame_output_data);
+	$frame++;
+}
+?>
