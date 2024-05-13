@@ -1,0 +1,108 @@
+#!/bin/php
+<?php
+
+$WS2812_RESET_CHAR=chr(0x00);
+#$WS2812_PIXEL_COLORS=3;
+#$WS2812_PIXEL_COLOR_BITS=8;
+$WS2812_RESET_BYTES_MIN=15;
+$WS2812_PIXEL_BYTES=9;
+$WS2812_BIT_0=4;
+$WS2812_BIT_1=6;
+
+if ($argc < 2 || $argc > 2){
+	echo "${argv[0]} config\n";
+	exit(1);
+}
+
+if (!is_file($argv[1])){
+	echo "${argv[1]} config file is not found.\n";
+	exit(1);
+}
+
+$config = parse_ini_file($argv[1]);
+
+fwrite(STDERR,print_r($config,true));
+
+$frame_width = intval($config["SALED_PANEL_WIDTH"]);
+$frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_pixels = $frame_width * $frame_height;
+
+$frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
+$frame_input_size = $frame_pixels * $frame_input_pixel_size;
+
+$frame_init_pad = (24 - (($frame_pixels * $WS2812_PIXEL_BYTES + $WS2812_RESET_BYTES_MIN) % 24)) % 24;
+$frame_init_pad = (24 - ($frame_pixels * $WS2812_PIXEL_BYTES) % 24) % 24;
+$frame_init_pad = (64 - ($frame_pixels * $WS2812_PIXEL_BYTES) % 64) % 64;
+$frame_init = str_repeat($WS2812_RESET_CHAR, $frame_init_pad + $WS2812_RESET_BYTES_MIN);
+$frame_init = str_repeat($WS2812_RESET_CHAR, $frame_init_pad);
+
+$frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
+
+if ($frame_pixel_brightness < 1 || $frame_pixel_brightness > 15){
+	echo "Frame Pixel Brightness Exceeds Bounds\n";
+	exit(1);
+}
+
+#TODO: SALED_PANEL_HDR BRIGHTNESS CONTROL
+$frame_pixel_swap = $config["SALED_PANEL_PIXEL_LAYOUT"] === "rgb"; #RGB to BGR needs swap
+$frame_pixel_shift = $config["SALED_PANEL_PIXEL_LAYOUT"] === "bgr"; #GRB to BGR needs shift left
+
+if ($frame_pixel_swap){
+       	if ($frame_input_pixel_size !== 3){
+		echo "BGR Panel for HDR input is not implemented.";
+		exit(1);
+	}
+}
+
+#TODO: make use of stream API
+#TODO: handle snake addressing
+#TODO: 10+ bpp input processing
+$frame = 0;
+while ($frame_input_data = fread(STDIN, $frame_input_size)){
+	if ($frame_pixel_swap)
+		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
+	
+	$frame_output_data = implode(array_map(function($pixel) use ($WS2812_BIT_0, $WS2812_BIT_1) {
+			$ws2812_r = ord($pixel[0]);
+			$ws2812_r24 = (($ws2812_r & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
+			$ws2812_r24 |= (($ws2812_r & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
+			$ws2812_r24 |= (($ws2812_r & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
+			$ws2812_r24 |= (($ws2812_r & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
+			$ws2812_r24 |= (($ws2812_r & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
+			$ws2812_r24 |= (($ws2812_r & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
+			$ws2812_r24 |= (($ws2812_r & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
+			$ws2812_r24 |= (($ws2812_r * 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
+			$ws2812_r = substr(pack('V', $ws2812_r24),0,-1);
+
+			$ws2812_g = ord($pixel[1]);
+			$ws2812_g24 = (($ws2812_g & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
+			$ws2812_g24 |= (($ws2812_g & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
+			$ws2812_g24 |= (($ws2812_g & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
+			$ws2812_g24 |= (($ws2812_g & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
+			$ws2812_g24 |= (($ws2812_g & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
+			$ws2812_g24 |= (($ws2812_g & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
+			$ws2812_g24 |= (($ws2812_g & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
+			$ws2812_g24 |= (($ws2812_g & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
+			$ws2812_g = substr(pack('V', $ws2812_g24),0,-1);
+			
+			$ws2812_b = ord($pixel[2]);
+			$ws2812_b24 = (($ws2812_b & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
+			$ws2812_b24 |= (($ws2812_b & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
+			$ws2812_b24 |= (($ws2812_b & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
+			$ws2812_b24 |= (($ws2812_b & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
+			$ws2812_b24 |= (($ws2812_b & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
+			$ws2812_b24 |= (($ws2812_b & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
+			$ws2812_b24 |= (($ws2812_b & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
+			$ws2812_b24 |= (($ws2812_b & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
+			$ws2812_b = substr(pack('V', $ws2812_b24),0,-1);
+			
+			fwrite(STDERR, 'G'.decbin($ws2812_g24).PHP_EOL.'R'.decbin($ws2812_r24).PHP_EOL.'B'.decbin($ws2812_b24).PHP_EOL);
+			return "\0".$ws2812_g."\0".$ws2812_r."\0".$ws2812_b;
+	}, str_split($frame_input_data, $frame_input_pixel_size)));
+	fwrite(STDERR, PHP_EOL);
+	#fwrite(STDOUT, $frame_output_data.$frame_init);
+	fwrite(STDOUT, $frame_output_data);
+	sleep(1);
+	$frame++;
+}
+?>
