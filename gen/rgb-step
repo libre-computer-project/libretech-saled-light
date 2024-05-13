@@ -29,10 +29,10 @@ $frame_output_data_ref = str_repeat("\0", $frame_output_size);
 
 $byte_one=chr(0xff);
 
-$time_total = 0;
-$time_last = microtime(true);
 $frame = 0;
 $frame_last = 0;
+$time_total = 0;
+$time_last = microtime(true);
 do {
 	$time_start = microtime(true);
 	$frame_pixel_color_index = intval($frame / $frame_pixel_count) % 3;
@@ -42,9 +42,9 @@ do {
 	$time_total += microtime(true) - $time_start;
 	if ((microtime(true) - $time_last) > 1){
 		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frame_last = $frame;
 		$time_total = 0;
 		$time_last = microtime(true);
-		$frame_last = $frame;
 	}
 	fwrite(STDOUT, $frame_output_data);
 } while (++$frame);
