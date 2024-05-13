@@ -24,10 +24,16 @@ fwrite(STDERR,print_r($config,true));
 
 $frame_width = intval($config["SALED_PANEL_WIDTH"]);
 $frame_height = intval($config["SALED_PANEL_HEIGHT"]);
-$frame_pixels = $frame_width * $frame_height;
+$frame_pixel_count = $frame_width * $frame_height;
 
 $frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
-$frame_input_size = $frame_pixels * $frame_input_pixel_size;
+if ($frame_input_pixel_size != 3){
+	fwrite(STDERR, "${argv[0]} only 8BPP is implemented.");
+	exit(1);
+}
+$frame_input_size = $frame_pixel_count * $frame_input_pixel_size;
+$frame_output_pixel_size = intval($config["SALED_LED_PIXEL_BYTES"]);
+$frame_output_size = $frame_pixel_count * $frame_output_pixel_size + intval($config["SALED_LED_FRAME_INIT_BYTES"]);
 
 $frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
 $frame_led_brightness = intval($config["SALED_LED_BRIGHTNESS_DEFAULT"]);
@@ -48,7 +54,6 @@ if ($frame_pixel_swap){
 	}
 }
 
-#TODO: make use of stream API
 #TODO: handle snake addressing
 #TODO: 10+ bpp input processing
 $frame = 0;
@@ -60,18 +65,15 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	if ($frame_pixel_swap)
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
-	$frame_output_data = implode(array_map(function($pixel) use ($frame_pixel_init) {
-			return $frame_pixel_init.$pixel;
-	}, str_split($frame_input_data, $frame_input_pixel_size)));
-
+	$frame_output_data = chunk_split($frame_input_data, $frame_input_pixel_size, $frame_pixel_init);
 	$time_total += microtime(true) - $time_start;
 	if ((microtime(true) - $time_last) > 1){
 		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frame_last = $frame;
 		$time_total = 0;
 		$time_last = microtime(true);
-		$frame_last = $frame;
 	}
-	fwrite(STDOUT, $SK9822_FRAME_INIT.$frame_output_data);
+	fwrite(STDOUT, $SK9822_FRAME_INIT.$frame_pixel_init.$frame_output_data, $frame_output_size);
 	$frame++;
 }
 ?>
