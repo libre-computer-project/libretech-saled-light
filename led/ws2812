@@ -96,13 +96,13 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 			$ws2812_b24 |= (($ws2812_b & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
 			$ws2812_b = substr(pack('V', $ws2812_b24),0,-1);
 			
-			fwrite(STDERR, 'G'.decbin($ws2812_g24).PHP_EOL.'R'.decbin($ws2812_r24).PHP_EOL.'B'.decbin($ws2812_b24).PHP_EOL);
+			#fwrite(STDERR, 'G'.decbin($ws2812_g24).PHP_EOL.'R'.decbin($ws2812_r24).PHP_EOL.'B'.decbin($ws2812_b24).PHP_EOL);
 			return "\0".$ws2812_g."\0".$ws2812_r."\0".$ws2812_b;
 	}, str_split($frame_input_data, $frame_input_pixel_size)));
-	fwrite(STDERR, PHP_EOL);
+	#fwrite(STDERR, PHP_EOL);
 	#fwrite(STDOUT, $frame_output_data.$frame_init);
 	fwrite(STDOUT, $frame_output_data);
-	sleep(1);
+	usleep(100000);
 	$frame++;
 }
 ?>
