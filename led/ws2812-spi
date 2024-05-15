@@ -30,12 +30,6 @@ $frame_pixels = $frame_width * $frame_height;
 $frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
 $frame_input_size = $frame_pixels * $frame_input_pixel_size;
 
-$frame_init_pad = (24 - (($frame_pixels * $WS2812_PIXEL_BYTES + $WS2812_RESET_BYTES_MIN) % 24)) % 24;
-$frame_init_pad = (24 - ($frame_pixels * $WS2812_PIXEL_BYTES) % 24) % 24;
-$frame_init_pad = (64 - ($frame_pixels * $WS2812_PIXEL_BYTES) % 64) % 64;
-$frame_init = str_repeat($WS2812_RESET_CHAR, $frame_init_pad + $WS2812_RESET_BYTES_MIN);
-$frame_init = str_repeat($WS2812_RESET_CHAR, $frame_init_pad);
-
 $frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
 
 if ($frame_pixel_brightness < 1 || $frame_pixel_brightness > 15){
@@ -64,6 +58,8 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	
 	$frame_output_data = implode(array_map(function($pixel) use ($WS2812_BIT_0, $WS2812_BIT_1) {
 			$ws2812_r = ord($pixel[0]);
+			$ws2812_g = ord($pixel[1]);
+			$ws2812_b = ord($pixel[2]);
 			$ws2812_r24 = (($ws2812_r & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
 			$ws2812_r24 |= (($ws2812_r & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
 			$ws2812_r24 |= (($ws2812_r & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
@@ -74,7 +70,6 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 			$ws2812_r24 |= (($ws2812_r * 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
 			$ws2812_r = substr(pack('V', $ws2812_r24),0,-1);
 
-			$ws2812_g = ord($pixel[1]);
 			$ws2812_g24 = (($ws2812_g & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
 			$ws2812_g24 |= (($ws2812_g & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
 			$ws2812_g24 |= (($ws2812_g & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
@@ -85,7 +80,6 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 			$ws2812_g24 |= (($ws2812_g & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
 			$ws2812_g = substr(pack('V', $ws2812_g24),0,-1);
 			
-			$ws2812_b = ord($pixel[2]);
 			$ws2812_b24 = (($ws2812_b & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
 			$ws2812_b24 |= (($ws2812_b & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
 			$ws2812_b24 |= (($ws2812_b & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;

@@ -66,14 +66,15 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
 	$frame_output_data = chunk_split($frame_input_data, $frame_input_pixel_size, $frame_pixel_init);
-	$time_total += microtime(true) - $time_start;
-	if ((microtime(true) - $time_last) > 1){
+	$time_stop = microtime(true);
+	fwrite(STDOUT, $SK9822_FRAME_INIT.$frame_pixel_init.$frame_output_data, $frame_output_size);
+	$time_total += $time_stop - $time_start;
+	if (($time_stop - $time_last) > 1){
 		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
 		$frame_last = $frame;
 		$time_total = 0;
-		$time_last = microtime(true);
+		$time_last = $time_stop;
 	}
-	fwrite(STDOUT, $SK9822_FRAME_INIT.$frame_pixel_init.$frame_output_data, $frame_output_size);
 	$frame++;
 }
 ?>

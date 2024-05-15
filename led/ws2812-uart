@@ -1,0 +1,87 @@
+#!/bin/php
+<?php
+
+$WS2812_UART_BYTE=0b01011011;
+$WS2812_UART_LED_1=0b00000001;
+$WS2812_UART_LED_2=0b00001000;
+$WS2812_UART_LED_3=0b00100000;
+
+if ($argc < 2 || $argc > 2){
+	echo "${argv[0]} config\n";
+	exit(1);
+}
+
+if (!is_file($argv[1])){
+	echo "${argv[1]} config file is not found.\n";
+	exit(1);
+}
+
+$config = parse_ini_file($argv[1]);
+
+fwrite(STDERR,print_r($config,true));
+
+$frame_width = intval($config["SALED_PANEL_WIDTH"]);
+$frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_pixel_count = $frame_width * $frame_height;
+
+$frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
+$frame_input_size = $frame_pixel_count * $frame_input_pixel_size;
+
+$frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
+
+if ($frame_pixel_brightness < 1 || $frame_pixel_brightness > 15){
+	echo "Frame Pixel Brightness Exceeds Bounds\n";
+	exit(1);
+}
+
+#TODO: SALED_PANEL_HDR BRIGHTNESS CONTROL
+$frame_pixel_swap = $config["SALED_PANEL_PIXEL_LAYOUT"] === "rgb"; #RGB to BGR needs swap
+$frame_pixel_shift = $config["SALED_PANEL_PIXEL_LAYOUT"] === "bgr"; #GRB to BGR needs shift left
+
+if ($frame_pixel_swap){
+       	if ($frame_input_pixel_size !== 3){
+		echo "BGR Panel for HDR input is not implemented.";
+		exit(1);
+	}
+}
+
+#TODO: handle pixel shift
+#TODO: handle snake addressing
+#TODO: 10+ bpp input processing
+$frame = 0;
+$frame_last = 0;
+$time_total = 0;
+$time_last = microtime(true);
+while ($frame_input_data = fread(STDIN, $frame_input_size)){
+	$time_start = microtime(true);
+	if ($frame_pixel_swap)
+		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
+	
+	$frame_output_data = implode(array_map(function($pixel) use ($WS2812_UART_BYTE) {
+			$ws2812_r = ord($pixel[0]);
+			$ws2812_g = ord($pixel[1]);
+			$ws2812_b = ord($pixel[2]);
+			$led = str_repeat("\0",8);
+			$led[0] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b10000000) >> 7) ^ (($ws2812_g & 0b01000000) >> 3) ^ (($ws2812_g & 0b00100000) << 1));
+			$led[1] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b00010000) >> 4) ^ (($ws2812_g & 0b00001000))      ^ (($ws2812_g & 0b00000100) << 4));
+			$led[2] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b00000010) >> 1) ^ (($ws2812_g & 0b00000001) << 3) ^ (($ws2812_r & 0b10000000) >> 1));
+			$led[3] = chr($WS2812_UART_BYTE ^ (($ws2812_r & 0b01000000) >> 6) ^ (($ws2812_r & 0b00100000) >> 2) ^ (($ws2812_r & 0b00010000) << 2));
+			$led[4] = chr($WS2812_UART_BYTE ^ (($ws2812_r & 0b00001000) >> 3) ^ (($ws2812_r & 0b00000100) << 1) ^ (($ws2812_r & 0b00000010) << 5));
+			$led[5] = chr($WS2812_UART_BYTE ^ (($ws2812_r & 0b00000001))      ^ (($ws2812_b & 0b10000000) >> 4) ^ (($ws2812_b & 0b01000000)));
+			$led[6] = chr($WS2812_UART_BYTE ^ (($ws2812_b & 0b00100000) >> 5) ^ (($ws2812_b & 0b00010000) >> 1) ^ (($ws2812_b & 0b00001000) << 3));
+			$led[7] = chr($WS2812_UART_BYTE ^ (($ws2812_b & 0b00000100) >> 2) ^ (($ws2812_b & 0b00000010) << 2) ^ (($ws2812_b & 0b00000001) << 6));	
+			return $led;
+	}, str_split($frame_input_data, $frame_input_pixel_size)));
+	$time_stop = microtime(true);
+	fwrite(STDOUT, $frame_output_data);
+	$time_total += $time_stop - $time_start;
+	if (($time_stop - $time_last) > 1){
+		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frame_last = $frame;
+		$time_total = 0;
+		$time_last = $time_stop;
+	}
+	usleep(50000);
+	$frame++;
+}
+?>
