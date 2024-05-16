@@ -30,7 +30,7 @@ $frame_input_size = $frame_pixel_count * $frame_input_pixel_size;
 
 $frame_output_pixel_size = 8;
 $frame_output_size = $frame_pixel_count * $frame_output_pixel_size;
-$frame_output_data_ref = str_repeat("\0", $frame_output_pixel_size);
+$frame_output_led_ref = str_repeat("\0", $frame_output_pixel_size);
 
 $frame_time_report = isset($config["SALED_LED_FPS"]) ? intval($config["SALED_LED_FPS"]) : 0;
 
@@ -64,11 +64,11 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	if ($frame_pixel_swap)
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
-	$frame_output_data = implode(array_map(function($pixel) use ($frame_output_data_ref, $WS2812_UART_BYTE) {
+	$frame_output_data = implode(array_map(function($pixel) use ($frame_output_led_ref, $WS2812_UART_BYTE) {
 			$ws2812_r = ord($pixel[0]);
 			$ws2812_g = ord($pixel[1]);
 			$ws2812_b = ord($pixel[2]);
-			$led = $frame_output_data_ref;
+			$led = $frame_output_led_ref;
 			$led[0] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b10000000) >> 7) ^ (($ws2812_g & 0b01000000) >> 3) ^ (($ws2812_g & 0b00100000) << 1));
 			$led[1] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b00010000) >> 4) ^ (($ws2812_g & 0b00001000))      ^ (($ws2812_g & 0b00000100) << 4));
 			$led[2] = chr($WS2812_UART_BYTE ^ (($ws2812_g & 0b00000010) >> 1) ^ (($ws2812_g & 0b00000001) << 3) ^ (($ws2812_r & 0b10000000) >> 1));
@@ -88,7 +88,7 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 		$time_total = 0;
 		$time_last = $time_stop;
 	}
-	usleep(100000);
+	usleep(50000);
 	$frame++;
 }
 ?>

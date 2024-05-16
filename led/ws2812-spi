@@ -2,12 +2,11 @@
 <?php
 
 $WS2812_RESET_CHAR=chr(0x00);
-#$WS2812_PIXEL_COLORS=3;
-#$WS2812_PIXEL_COLOR_BITS=8;
 $WS2812_RESET_BYTES_MIN=15;
-$WS2812_PIXEL_BYTES=9;
-$WS2812_BIT_0=4;
-$WS2812_BIT_1=6;
+
+$WS2812_SPI_BYTE_0=0b10010010;
+$WS2812_SPI_BYTE_1=0b01001001;
+$WS2812_SPI_BYTE_2=0b00100100;
 
 if ($argc < 2 || $argc > 2){
 	echo "${argv[0]} config\n";
@@ -25,10 +24,20 @@ fwrite(STDERR,print_r($config,true));
 
 $frame_width = intval($config["SALED_PANEL_WIDTH"]);
 $frame_height = intval($config["SALED_PANEL_HEIGHT"]);
-$frame_pixels = $frame_width * $frame_height;
+$frame_pixel_count = $frame_width * $frame_height;
 
 $frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
-$frame_input_size = $frame_pixels * $frame_input_pixel_size;
+if ($frame_input_pixel_size != 3){
+	fwrite(STDERR, "${argv[0]} only 8BPP is implemented.");
+	exit(1);
+}
+$frame_input_size = $frame_pixel_count * $frame_input_pixel_size;
+
+$frame_output_pixel_size = 9;
+$frame_output_size = $frame_pixel_count * $frame_output_pixel_size;
+$frame_output_led_ref = str_repeat("\0", $frame_output_pixel_size);
+
+$frame_time_report = isset($config["SALED_LED_FPS"]) ? intval($config["SALED_LED_FPS"]) : 0;
 
 $frame_pixel_brightness = intval($config["SALED_PANEL_BRIGHTNESS"]);
 
@@ -48,54 +57,47 @@ if ($frame_pixel_swap){
 	}
 }
 
-#TODO: make use of stream API
+#TODO: handle pixel shift
 #TODO: handle snake addressing
 #TODO: 10+ bpp input processing
 $frame = 0;
+$frame_last = 0;
+$time_total = 0;
+$time_last = microtime(true);
 while ($frame_input_data = fread(STDIN, $frame_input_size)){
+	$time_start = microtime(true);
 	if ($frame_pixel_swap)
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
-	$frame_output_data = implode(array_map(function($pixel) use ($WS2812_BIT_0, $WS2812_BIT_1) {
+	$frame_output_data = implode(array_map(function($pixel) use ($frame_output_led_ref, $WS2812_SPI_BYTE_0, $WS2812_SPI_BYTE_1, $WS2812_SPI_BYTE_2) {
 			$ws2812_r = ord($pixel[0]);
 			$ws2812_g = ord($pixel[1]);
 			$ws2812_b = ord($pixel[2]);
-			$ws2812_r24 = (($ws2812_r & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
-			$ws2812_r24 |= (($ws2812_r & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
-			$ws2812_r24 |= (($ws2812_r & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
-			$ws2812_r24 |= (($ws2812_r & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
-			$ws2812_r24 |= (($ws2812_r & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
-			$ws2812_r24 |= (($ws2812_r & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
-			$ws2812_r24 |= (($ws2812_r & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
-			$ws2812_r24 |= (($ws2812_r * 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
-			$ws2812_r = substr(pack('V', $ws2812_r24),0,-1);
-
-			$ws2812_g24 = (($ws2812_g & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
-			$ws2812_g24 |= (($ws2812_g & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
-			$ws2812_g24 |= (($ws2812_g & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
-			$ws2812_g24 |= (($ws2812_g & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
-			$ws2812_g24 |= (($ws2812_g & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
-			$ws2812_g24 |= (($ws2812_g & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
-			$ws2812_g24 |= (($ws2812_g & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
-			$ws2812_g24 |= (($ws2812_g & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
-			$ws2812_g = substr(pack('V', $ws2812_g24),0,-1);
-			
-			$ws2812_b24 = (($ws2812_b & 0b10000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 21;
-			$ws2812_b24 |= (($ws2812_b & 0b01000000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 18;
-			$ws2812_b24 |= (($ws2812_b & 0b00100000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 15;
-			$ws2812_b24 |= (($ws2812_b & 0b00010000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 12;
-			$ws2812_b24 |= (($ws2812_b & 0b00001000) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 9;
-			$ws2812_b24 |= (($ws2812_b & 0b00000100) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 6;
-			$ws2812_b24 |= (($ws2812_b & 0b00000010) ? $WS2812_BIT_1 : $WS2812_BIT_0) << 3;
-			$ws2812_b24 |= (($ws2812_b & 0b00000001) ? $WS2812_BIT_1 : $WS2812_BIT_0);
-			$ws2812_b = substr(pack('V', $ws2812_b24),0,-1);
-			
-			#fwrite(STDERR, 'G'.decbin($ws2812_g24).PHP_EOL.'R'.decbin($ws2812_r24).PHP_EOL.'B'.decbin($ws2812_b24).PHP_EOL);
-			return "\0".$ws2812_g."\0".$ws2812_r."\0".$ws2812_b;
+			#grb
+			$led = $frame_output_led_ref;
+			$led[0] = chr($WS2812_SPI_BYTE_0 | (($ws2812_g & 0b10000000) >> 1) | (($ws2812_g & 0b01000000) >> 3) | (($ws2812_g & 0b00100000) >> 5));
+			$led[1] = chr($WS2812_SPI_BYTE_1 | (($ws2812_g & 0b00010000) << 1) | (($ws2812_g & 0b00001000) >> 1));
+			$led[2] = chr($WS2812_SPI_BYTE_2 | (($ws2812_g & 0b00000100) << 5) | (($ws2812_g & 0b00000010) << 3) | (($ws2812_g & 0b00000001) << 1));
+			$led[3] = chr($WS2812_SPI_BYTE_0 | (($ws2812_r & 0b10000000) >> 1) | (($ws2812_r & 0b01000000) >> 3) | (($ws2812_r & 0b00100000) >> 5));
+			$led[4] = chr($WS2812_SPI_BYTE_1 | (($ws2812_r & 0b00010000) << 1) | (($ws2812_r & 0b00001000) >> 1));
+			$led[5] = chr($WS2812_SPI_BYTE_2 | (($ws2812_r & 0b00000100) << 5) | (($ws2812_r & 0b00000010) << 3) | (($ws2812_r & 0b00000001) << 1));
+			$led[6] = chr($WS2812_SPI_BYTE_0 | (($ws2812_b & 0b10000000) >> 1) | (($ws2812_b & 0b01000000) >> 3) | (($ws2812_b & 0b00100000) >> 5));
+			$led[7] = chr($WS2812_SPI_BYTE_1 | (($ws2812_b & 0b00010000) << 1) | (($ws2812_b & 0b00001000) >> 1));
+			$led[8] = chr($WS2812_SPI_BYTE_2 | (($ws2812_b & 0b00000100) << 5) | (($ws2812_b & 0b00000010) << 3) | (($ws2812_b & 0b00000001) << 1));
+			//for ($i = 0; $i < 9; $i++)
+			//	fwrite(STDERR, str_pad(decbin(ord($led[$i])), 8 , "0", STR_PAD_LEFT)." ");
+			//fwrite(STDERR, PHP_EOL);
+			return $led;
 	}, str_split($frame_input_data, $frame_input_pixel_size)));
-	#fwrite(STDERR, PHP_EOL);
-	#fwrite(STDOUT, $frame_output_data.$frame_init);
+	$time_stop = microtime(true);
 	fwrite(STDOUT, $frame_output_data);
+	$time_total += $time_stop - $time_start;
+	if (($frame_time_report !== 0) && (($time_stop - $time_last) > $frame_time_report)){
+		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frame_last = $frame;
+		$time_total = 0;
+		$time_last = $time_stop;
+	}
 	usleep(100000);
 	$frame++;
 }
