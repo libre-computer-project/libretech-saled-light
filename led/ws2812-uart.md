@@ -5,9 +5,9 @@
 ## UART
 
 * WS2812 codes are 3 bits, 0b110 for 1 or 0b100 for 0
+* 800K/s WS2812 codes is 2.4Mbit so baud rate should be set to 2.5Mbit
 * 3 WS2812 codes can be represented by a 7-bit UART packet with 1 stop bit
 * UART start and stop bits feign as MSB or LSB of WS2812 code
-* 800K/s WS2812 codes is 2.4Mbit so baud rate should be set to 2.5Mbit
 * UART 7-bit mode read bytes from LSB with the 8th MSB bit ignored
 
 ## Hardware Requirement

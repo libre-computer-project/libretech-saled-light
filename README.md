@@ -51,7 +51,7 @@ Utilize standard Linux facilities for input and output buffering to mitigate som
 
 ## LEDs Supported
 
-* WS2812
+* [WS2812X](led/ws2812.md)
 * SK9822
 * APA102
 
