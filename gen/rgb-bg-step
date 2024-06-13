@@ -1,0 +1,59 @@
+#!/bin/php
+<?php
+
+$RGB_BYTE_ONE=chr(0xff);
+$RGB_BYTE_BG=chr(0x0f);
+
+if ($argc < 2 || $argc > 2){
+	echo "${argv[0]} config\n";
+	exit(1);
+}
+
+if (!is_file($argv[1])){
+	echo "${argv[1]} config file is not found.\n";
+	exit(1);
+}
+
+$config = parse_ini_file($argv[1]);
+
+fwrite(STDERR,print_r($config,true));
+
+$frame_width = intval($config["SALED_PANEL_WIDTH"]);
+$frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_pixel_count = $frame_width * $frame_height;
+
+$frame_output_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
+if ($frame_output_pixel_size != 3){
+	fwrite(STDERR, "${argv[0]} only 8BPP is implemented.");
+	exit(1);
+}
+$frame_output_size = $frame_pixel_count * $frame_output_pixel_size;
+$frame_output_data_ref = array(
+       str_repeat("$RGB_BYTE_BG\0\0", $frame_pixel_count),
+       str_repeat("\0$RGB_BYTE_BG\0", $frame_pixel_count),
+       str_repeat("\0\0$RGB_BYTE_BG", $frame_pixel_count));
+
+$frame_time_report = isset($config["SALED_GEN_FPS"]) ? intval($config["SALED_GEN_FPS"]) : 0;
+
+$frame = 0;
+$frame_last = 0;
+$time_total = 0;
+$time_last = microtime(true);
+do {
+	$time_start = microtime(true);
+	$frame_pixel_color_index = intval($frame / $frame_pixel_count) % 3;
+	$frame_pixel_byte_offset = ($frame % $frame_pixel_count) * 3 + $frame_pixel_color_index;
+	$frame_output_data = $frame_output_data_ref[(intval($frame / $frame_pixel_count) + 2) % 3];
+	$frame_output_data[$frame_pixel_byte_offset] = $RGB_BYTE_ONE;
+	$time_stop = microtime(true);
+	fwrite(STDOUT, $frame_output_data);
+	$time_total += $time_stop - $time_start;
+	if (($frame_time_report !== 0) && (($time_stop - $time_last) > $frame_time_report)){
+		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frame_last = $frame;
+		$time_total = 0;
+		$time_last = $time_stop;
+	}
+} while (++$frame);
+fclose($zero_source);
+?>
