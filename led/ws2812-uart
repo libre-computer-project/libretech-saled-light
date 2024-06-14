@@ -61,6 +61,7 @@ $time_total = 0;
 $time_last = microtime(true);
 while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	$time_start = microtime(true);
+	#fwrite(STDERR, $argv[0].":	$time_start\n");
 	if ($frame_pixel_swap)
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
@@ -83,12 +84,13 @@ while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	fwrite(STDOUT, $frame_output_data);
 	$time_total += $time_stop - $time_start;
 	if (($frame_time_report !== 0) && (($time_stop - $time_last) > $frame_time_report)){
-		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frames = $frame - $frame_last;
+		fwrite(STDERR, $argv[1]."	".$argv[0].":	$frames / ".round($frames / $time_total)." fps\n");
 		$frame_last = $frame;
 		$time_total = 0;
 		$time_last = $time_stop;
 	}
-	usleep(50000);
+	usleep(5500);
 	$frame++;
 }
 ?>
