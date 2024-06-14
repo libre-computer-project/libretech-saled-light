@@ -19,6 +19,7 @@ fwrite(STDERR,print_r($config,true));
 
 $frame_width = intval($config["SALED_PANEL_WIDTH"]);
 $frame_height = intval($config["SALED_PANEL_HEIGHT"]);
+$frame_snake = $config["SALED_PANEL_ADDRESSING"] === "snake";
 $frame_pixel_count = $frame_width * $frame_height;
 
 $frame_input_pixel_size = (intval($config["SALED_INPUT_BPP"]) === 8) ? 3 : 4;
@@ -53,7 +54,6 @@ if ($frame_pixel_swap){
 }
 
 #TODO: handle pixel shift
-#TODO: handle snake addressing
 #TODO: 10+ bpp input processing
 $frame = 0;
 $frame_last = 0;
@@ -62,6 +62,13 @@ $time_last = microtime(true);
 while ($frame_input_data = fread(STDIN, $frame_input_size)){
 	$time_start = microtime(true);
 	#fwrite(STDERR, $argv[0].":	$time_start\n");
+	if ($frame_snake){
+		$frame_rows = str_split($frame_input_data, $frame_width * $frame_input_pixel_size);
+		array_walk($frame_rows, function(&$val, $key, $chunk){
+			if (($key % 2) === 0) $val = implode(array_reverse(str_split($val, $chunk)));
+		}, $frame_input_pixel_size);
+		$frame_input_data = implode($frame_rows);
+	}
 	if ($frame_pixel_swap)
 		$frame_input_data = implode(array_map("strrev",str_split($frame_input_data, $frame_input_pixel_size)));
 	
