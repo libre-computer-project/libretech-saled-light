@@ -1,8 +1,8 @@
 #!/bin/php
 <?php
 
-$RGB_BYTE_ONE=chr(0xff);
-$RGB_BYTE_BG=chr(0x0f);
+$RGB_BYTE_ONE=chr(0x7f);
+$RGB_BYTE_BG=chr(0x01);
 
 if ($argc < 2 || $argc > 2){
 	echo "${argv[0]} config\n";
@@ -49,7 +49,8 @@ do {
 	fwrite(STDOUT, $frame_output_data);
 	$time_total += $time_stop - $time_start;
 	if (($frame_time_report !== 0) && (($time_stop - $time_last) > $frame_time_report)){
-		fwrite(STDERR, $argv[0].":	".round(($frame - $frame_last) / $time_total)." fps\n");
+		$frames = $frame - $frame_last;
+		fwrite(STDERR, $argv[0].":	$frames / ".round($frames / $time_total)." fps\n");
 		$frame_last = $frame;
 		$time_total = 0;
 		$time_last = $time_stop;
